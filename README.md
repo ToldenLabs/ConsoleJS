@@ -1,4 +1,4 @@
-# LoggingJS
+# ConsoleJS a fork of LoggingJS
 A logging library for managing logging errors/messages to servers with corresponding data.
 
 ## Quickstart
