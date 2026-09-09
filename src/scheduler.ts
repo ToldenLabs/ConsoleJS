@@ -1,85 +1,92 @@
 /// <reference path="interfaces.ts" />
 
 interface Task {
-  handler: EntryHandler,
-  entry: BaseLogEntry
+  readonly handler: EntryHandler;
+  readonly entry: BaseLogEntry;
 }
-
 
 namespace Logging {
   export namespace scheduler {
 
     export abstract class BaseScheduler {
+      abstract push(handler: EntryHandler, entry: BaseLogEntry): void;
 
-      public abstract push(handler: EntryHandler, entry: BaseLogEntry): void;
-      public static isSupported(): boolean {
+      static isSupported(): boolean {
         return false;
       }
-
     }
 
+
     export class IdleBackgroundScheduler extends BaseScheduler {
-      protected queue: Array<Task>;
-      protected isHandling: number;
-      protected timeout?: number;
+      protected readonly queue: Task[] = [];
+      protected isHandling = false;
+      protected readonly timeout?: number;
 
       constructor(timeout?: number) {
         super();
-        this.queue = [];
-        this.isHandling = 0;
+
         this.timeout = timeout;
         this.handle = this.handle.bind(this);
       }
 
-      public push(handler: EntryHandler, entry: BaseLogEntry): void {
-        const task: Task = {
-          handler: handler,
-          entry: entry
-        };
-        this.queue.push(task);
+      push(handler: EntryHandler, entry: BaseLogEntry): void {
+        this.queue.push({ handler, entry });
+
         if (!this.isHandling) {
           this.startIdleProcessing();
         }
       }
 
-      protected startIdleProcessing() {
-        if (this.timeout) {
-          this.isHandling = requestIdleCallback(this.handle, { timeout: this.timeout });
+      protected startIdleProcessing(): void {
+        this.isHandling = true;
+
+        if (this.timeout !== undefined) {
+          requestIdleCallback(this.handle, {
+            timeout: this.timeout
+          });
         } else {
-          this.isHandling = requestIdleCallback(this.handle);
+          requestIdleCallback(this.handle);
         }
       }
 
-      protected handle(deadline: IdleDeadline) {
-        while ((deadline.timeRemaining() > 0 || deadline.didTimeout) && this.queue.length > 0) {
-            const task: Task = this.queue.shift() as Task;
-            task.handler.handle(task.entry);
+      protected handle(deadline: IdleDeadline): void {
+        while (
+          this.queue.length > 0 &&
+          (deadline.timeRemaining() > 0 || deadline.didTimeout)
+        ) {
+          const task = this.queue.shift();
+
+          if (!task) {
+            break;
+          }
+
+          task.handler.handle(task.entry);
         }
 
-        if (this.queue.length) {
+        if (this.queue.length > 0) {
           this.startIdleProcessing();
         } else {
-          this.isHandling = 0;
+          this.isHandling = false;
         }
       }
 
-      public static isSupported(): boolean {
-        return 'requestIdleCallback' in window;
+      static isSupported(): boolean {
+        return typeof requestIdleCallback === "function";
       }
     }
 
 
     export class BlockingScheduler extends BaseScheduler {
-      protected timeout?: number;
+      protected readonly timeout: number;
 
-      constructor(timeout?: number) {
+      constructor(timeout = 0) {
         super();
-        this.timeout = timeout || 0;
+        this.timeout = timeout;
       }
 
-      public push(handler: EntryHandler, entry: BaseLogEntry): void {
-        if (this.timeout) {
-          setTimeout(function() {
+      push(handler: EntryHandler, entry: BaseLogEntry): void {
+        if (this.timeout > 0) {
+          setTimeout(() => {
             handler.handle(entry);
           }, this.timeout);
         } else {
@@ -87,40 +94,50 @@ namespace Logging {
         }
       }
 
-      public static isSupported(): boolean {
+      static isSupported(): boolean {
         return true;
       }
-
     }
 
 
     export class PrioritizedTaskScheduler extends BaseScheduler {
-      protected priority: string;
-      public controller: any;
+      protected priority: TaskPriority;
+      public readonly controller: TaskController;
 
-      constructor(priority='background') {
+      constructor(priority: TaskPriority = "background") {
         super();
+
         this.priority = priority;
-        this.controller = new (window as any).TaskController({ priority: priority });
+        this.controller = new TaskController({
+          priority
+        });
       }
 
-      public push(handler: EntryHandler, entry: BaseLogEntry): void {
-        (window as any).scheduler.postTask(function() {
-          handler.handle(entry);
-        }, { signal: this.controller.signal });
+      push(handler: EntryHandler, entry: BaseLogEntry): void {
+        scheduler.postTask(
+          () => {
+            handler.handle(entry);
+          },
+          {
+            signal: this.controller.signal
+          }
+        );
       }
 
-      public abort(): void {
+      abort(): void {
         this.controller.abort();
       }
 
-      public setPriority(priority: string): void {
+      setPriority(priority: TaskPriority): void {
         this.priority = priority;
         this.controller.setPriority(priority);
       }
 
-      public static isSupported(): boolean {
-        return 'scheduler' in window;
+      static isSupported(): boolean {
+        return (
+          typeof scheduler !== "undefined" &&
+          typeof TaskController !== "undefined"
+        );
       }
     }
 
