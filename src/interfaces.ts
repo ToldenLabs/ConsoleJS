@@ -1,34 +1,35 @@
-interface DataCollector {
-  collect(): any;
+```ts
+interface DataCollector<T = unknown> {
+  collect(): T;
 }
 
 interface Timestamp {
-  value: Date,
-  offset: number,
-  timestamp: number
+  readonly value: Date;
+  readonly offset: number;
+  readonly timestamp: number;
 }
 
-interface LogEntryMetadata {
-  timestamp: Timestamp,
-  type: string,
-  environment: string,
-  data: any
+interface LogEntryMetadata<T = unknown> {
+  readonly timestamp: Timestamp;
+  readonly type: string;
+  readonly environment: string;
+  readonly data: T;
 }
 
-interface BaseLogEntry {
-  type: string,
-  metadata: LogEntryMetadata,
-  getMessage(): string,
-  toJSON(): any
-};
+interface BaseLogEntry<T = unknown> {
+  readonly type: string;
+  readonly metadata: LogEntryMetadata<T>;
 
-
-interface LogEntry extends BaseLogEntry {
-  arguments: Array<any>
+  getMessage(): string;
+  toJSON(): unknown;
 }
 
-interface LogEventEntry extends BaseLogEntry {
-  event: ErrorEvent
+interface LogEntry<T = unknown> extends BaseLogEntry<T> {
+  readonly arguments: readonly unknown[];
+}
+
+interface LogEventEntry<T = unknown> extends BaseLogEntry<T> {
+  readonly event: ErrorEvent;
 }
 
 interface EntryHandler {
@@ -38,3 +39,4 @@ interface EntryHandler {
 interface EventLogger {
   handle(event: Event): boolean;
 }
+```
